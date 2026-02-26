@@ -1,7 +1,7 @@
 """
 dashboard.py
 ============
-Streamlit dashboard — HYROX Open Males global results evolution.
+Streamlit dashboard — HYROX Doubles Open Males global results evolution.
 
 Run:
     streamlit run dashboard.py
@@ -20,7 +20,7 @@ import streamlit as st
 # ── Page config ───────────────────────────────────────────────────────────────
 
 st.set_page_config(
-    page_title="HYROX Open Males – Global Evolution",
+    page_title="HYROX Doubles Open Males – Global Evolution",
     page_icon="🏋️",
     layout="wide",
 )
@@ -87,7 +87,10 @@ with st.sidebar:
     sel_seasons = st.multiselect("Season(s)", seasons, default=seasons)
 
     nationalities = sorted(df["nationality"].dropna().unique())
-    sel_nat = st.multiselect("Nationality (optional)", nationalities)
+    if nationalities:
+        sel_nat = st.multiselect("Nationality (optional)", nationalities)
+    else:
+        sel_nat = []
 
     max_rank_val = int(df["rank"].max()) if df["rank"].max() > 0 else 100
     min_rank, max_rank = st.slider(
@@ -113,7 +116,7 @@ if dff.empty:
 
 # ── Header ────────────────────────────────────────────────────────────────────
 
-st.title("HYROX Open Males – Global Results Evolution")
+st.title("HYROX Doubles Open Males – Global Results Evolution")
 st.caption(
     f"Showing **{len(dff):,}** athlete-results across "
     f"**{dff['event_code'].nunique()}** events · "
@@ -130,7 +133,37 @@ col4.metric("Median finish time", fmt_seconds(dff["total_seconds"].median()))
 
 st.divider()
 
-# ── 1. World Record Progression ───────────────────────────────────────────────
+# ── 1. Season comparison tables ──────────────────────────────────────────
+
+st.subheader("Season Comparison – Top finishers side by side")
+
+display_cols = ["event_main_group", "rank", "athlete", "age_group", "total_time"]
+display_cols = [c for c in display_cols if c in dff.columns]
+
+available_seasons = sorted(dff["season"].dropna().unique())
+if len(available_seasons) >= 2:
+    col_left, col_right = st.columns(2)
+
+    with col_left:
+        season_a = st.selectbox("Season A", available_seasons, index=0, key="cmp_a")
+        df_a = dff[dff["season"] == season_a][display_cols].sort_values(["event_main_group", "rank"])
+        st.caption(f"**{season_a}** — {len(df_a):,} results")
+        st.dataframe(df_a, use_container_width=True, height=500)
+
+    with col_right:
+        season_b = st.selectbox("Season B", available_seasons,
+                                index=len(available_seasons) - 1, key="cmp_b")
+        df_b = dff[dff["season"] == season_b][display_cols].sort_values(["event_main_group", "rank"])
+        st.caption(f"**{season_b}** — {len(df_b):,} results")
+        st.dataframe(df_b, use_container_width=True, height=500)
+else:
+    st.info("Need at least 2 seasons to compare. Only 1 season in the data.")
+    df_only = dff[display_cols].sort_values(["event_main_group", "rank"])
+    st.dataframe(df_only, use_container_width=True, height=500)
+
+st.divider()
+
+# ── 2. World Record Progression ───────────────────────────────────────────────
 
 st.subheader("Best Time per Event")
 
@@ -226,98 +259,15 @@ fig_trend.update_layout(
 st.plotly_chart(fig_trend, use_container_width=True)
 
 # ── 4. Top Countries ──────────────────────────────────────────────────────────
+# (Skipped — nationality data not available for Doubles events)
 
-st.subheader("Top Nationalities by Number of Finishers")
-
-top_n_countries = 20
-country_counts = (
-    dff["nationality"].value_counts()
-    .head(top_n_countries)
-    .reset_index()
-    .rename(columns={"nationality": "Country", "count": "Finishers"})
-)
-
-fig_countries = px.bar(
-    country_counts,
-    x="Finishers",
-    y="Country",
-    orientation="h",
-    color="Finishers",
-    color_continuous_scale="Blues",
-)
-fig_countries.update_layout(yaxis=dict(autorange="reversed"), height=500, coloraxis_showscale=False)
-st.plotly_chart(fig_countries, use_container_width=True)
-
-# ── 5. Country Average Time (top countries) ───────────────────────────────────
-
-st.subheader("Average Finish Time by Nationality (top 20 by volume)")
-
-top_countries = country_counts["Country"].tolist()
-country_avg = (
-    dff[dff["nationality"].isin(top_countries)]
-    .groupby("nationality")["total_seconds"]
-    .mean()
-    .reset_index()
-    .rename(columns={"nationality": "Country", "total_seconds": "avg_seconds"})
-    .sort_values("avg_seconds")
-)
-country_avg["avg_fmt"] = country_avg["avg_seconds"].apply(fmt_seconds)
-
-fig_cavg = px.bar(
-    country_avg,
-    x="avg_seconds",
-    y="Country",
-    orientation="h",
-    color="avg_seconds",
-    color_continuous_scale="RdYlGn_r",
-    hover_data={"avg_fmt": True, "avg_seconds": False},
-    labels={"avg_seconds": "Avg finish time (s)"},
-)
-fig_cavg.update_layout(
-    xaxis=dict(
-        tickvals=list(range(3600, 10800, 600)),
-        ticktext=[fmt_seconds(s) for s in range(3600, 10800, 600)],
-    ),
-    yaxis=dict(autorange="reversed"),
-    height=500,
-    coloraxis_showscale=False,
-)
-st.plotly_chart(fig_cavg, use_container_width=True)
-
-# ── 6. Season comparison tables ───────────────────────────────────────────────
-
-st.subheader("Season Comparison – Top finishers side by side")
-
-display_cols = ["event_main_group", "rank", "athlete", "nationality", "age_group", "total_time"]
-display_cols = [c for c in display_cols if c in dff.columns]
-
-available_seasons = sorted(dff["season"].dropna().unique())
-if len(available_seasons) >= 2:
-    col_left, col_right = st.columns(2)
-
-    with col_left:
-        season_a = st.selectbox("Season A", available_seasons, index=0, key="cmp_a")
-        df_a = dff[dff["season"] == season_a][display_cols].sort_values(["event_main_group", "rank"])
-        st.caption(f"**{season_a}** — {len(df_a):,} results")
-        st.dataframe(df_a, use_container_width=True, height=500)
-
-    with col_right:
-        season_b = st.selectbox("Season B", available_seasons,
-                                index=len(available_seasons) - 1, key="cmp_b")
-        df_b = dff[dff["season"] == season_b][display_cols].sort_values(["event_main_group", "rank"])
-        st.caption(f"**{season_b}** — {len(df_b):,} results")
-        st.dataframe(df_b, use_container_width=True, height=500)
-else:
-    st.info("Need at least 2 seasons to compare. Only 1 season in the data.")
-    df_only = dff[display_cols].sort_values(["event_main_group", "rank"])
-    st.dataframe(df_only, use_container_width=True, height=500)
 
 # ── 7. Raw data table ─────────────────────────────────────────────────────────
 
 with st.expander("Full raw data table"):
     all_cols = [
         "season", "event_main_group", "event_label", "category",
-        "gender", "rank", "athlete", "nationality", "age_group", "total_time",
+        "gender", "rank", "athlete", "age_group", "total_time",
     ]
     all_cols = [c for c in all_cols if c in dff.columns]
     st.dataframe(dff[all_cols].sort_values(["event_main_group", "rank"]), use_container_width=True)

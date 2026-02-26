@@ -1,3 +1,4 @@
+
 """
 fetch_hyrox.py
 ==============
@@ -38,7 +39,7 @@ OUTPUT_FILE   = Path(__file__).parent / "hyrox_results.csv"
 PER_PAGE      = 25          # O site mostra 25 resultados por página
 MAX_PAGES     = 4           # Máximo de páginas por evento/sexo (4×25 = top 100)
 REQUEST_DELAY = 1.0         # Pausa entre pedidos (em segundos)
-ONLY_OPEN     = True        # Apenas categoria HYROX Open (não PRO/Doubles/etc.)
+ONLY_DOUBLES_OPEN = True    # Apenas HYROX Doubles Open Males (HD_ prefix)
 
 HEADERS = {
     "User-Agent": (
@@ -184,7 +185,8 @@ def parse_result_rows(soup: BeautifulSoup) -> list[dict]:
             label.decompose()
 
         rank_el  = row.find(class_=re.compile(r"place-primary"))
-        name_el  = row.find(class_=re.compile(r"type-fullname"))
+        name_el  = row.find("h4", class_=re.compile(r"type-fullname")) \
+                    or row.find("h4", class_=re.compile(r"type-relay_member"))
         nat_el   = row.find("span", class_="nation__abbr")
         age_el   = row.find(class_=re.compile(r"type-age_class"))
         time_el  = row.find(class_=re.compile(r"type-time"))
@@ -327,13 +329,13 @@ def main():
                     print(f"    Sem códigos de evento")
                     continue
 
-                # Filtrar apenas HYROX Open se ONLY_OPEN=True
-                if ONLY_OPEN:
+                # Filtrar apenas HYROX Doubles Open se ONLY_DOUBLES_OPEN=True
+                if ONLY_DOUBLES_OPEN:
                     event_opts = [o for o in event_opts
-                                  if category_from_code(o["value"]) == "HYROX"]
+                                  if category_from_code(o["value"]) == "HYROX DOUBLES"]
 
                 if not event_opts:
-                    print(f"    Sem eventos Open — a ignorar")
+                    print(f"    Sem eventos Doubles Open — a ignorar")
                     continue
 
                 # Preferir OVERALL (resultados globais combinados de vários dias)
